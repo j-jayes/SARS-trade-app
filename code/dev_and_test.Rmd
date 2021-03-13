@@ -1,0 +1,171 @@
+---
+title: "Untitled"
+author: "JJayes"
+date: "13/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list = ls())
+
+library(tidyverse)
+library(scales)
+library(lubridate)
+
+```
+
+# Purpose
+
+Making an app that will allow people to explore import and export data and draw graphs
+
+# Data
+
+From the SARS website. It's not in a useful format at the moment. That's the purpose of the app.
+
+# Dev
+
+### Reading in data
+
+```{r}
+df <- read.csv("data/raw/Report (17).csv")
+
+# or more data
+
+myfiles <- list.files(path = "data/raw", pattern = "*.csv", full.names = T)
+
+df_comb <- map_df(myfiles, read.csv)
+
+df <- df_comb %>% as_tibble()
+
+```
+
+
+
+```{r}
+df <- df %>% 
+  as_tibble() %>% 
+  janitor::clean_names()
+
+df %>% 
+  filter(tariff_and_description == "01011000 - Pure-Bred Breeding Animals") %>% 
+  group_by(country_of_origin_name) %>% 
+  mutate(sum_value = sum(customs_value)) %>% 
+  ungroup() %>% 
+  mutate(country_of_origin_name = fct_lump(country_of_origin_name, 10, w = sum_value)) %>% 
+  mutate(country_of_origin_name = fct_reorder(country_of_origin_name, sum_value, .fun = sum)) %>% 
+  ggplot(aes(sum_value, country_of_origin_name, fill = country_of_origin_name)) +
+  geom_col()
+
+
+```
+
+### Feature engineering
+
+```{r}
+# date
+df <- df %>%
+  mutate(date = glue::glue("{year_month}01"),
+         date = ymd(date))
+
+
+df %>% 
+  filter(tariff_and_description == "01011000 - Pure-Bred Breeding Animals") %>% 
+  group_by(country_of_origin_name, date) %>% 
+  mutate(sum_value = sum(customs_value)) %>% 
+  ungroup() %>% 
+  mutate(country_of_origin_name = fct_lump(country_of_origin_name, 3, w = sum_value)) %>% 
+  mutate(country_of_origin_name = fct_reorder(country_of_origin_name, sum_value)) %>% 
+  ggplot(aes(date, sum_value, fill = country_of_origin_name)) +
+  geom_col(position = "dodge") +
+  theme(legend.position = "bottom")
+
+```
+
+
+
+```{r}
+
+a <- df %>% 
+  group_by(country_of_origin_name, chapter, calendar_year) %>% 
+  summarise(value_by_chapter = sum(customs_value)) %>%
+  ungroup() %>% 
+  group_by(country_of_origin_name) %>% 
+  mutate(total_value = sum(value_by_chapter)) %>% 
+  ungroup() %>% 
+  mutate(country_of_origin_name = fct_reorder(country_of_origin_name, total_value),
+         rank = dense_rank(desc(total_value))) %>% 
+  filter(rank <= 12) %>% 
+  mutate(chapter = factor(chapter)) %>% 
+  ggplot(aes(value_by_chapter, country_of_origin_name, fill = chapter)) +
+  geom_col(position = "stack") +
+  scale_x_continuous(labels = comma_format()) +
+  facet_wrap( ~ calendar_year) +
+  theme(legend.position = "none")
+
+library(plotly)
+
+ggplotly(a)
+
+```
+
+
+```{r}
+
+df %>% 
+  group_by(country_of_origin_name, calendar_year) %>% 
+  summarise(yearly_value = sum(customs_value)) %>%
+  ungroup() %>% 
+  group_by(country_of_origin_name) %>% 
+  mutate(total_value = sum(yearly_value)) %>% 
+  ungroup() %>% 
+  mutate(country_of_origin_name = fct_reorder(country_of_origin_name, total_value),
+         rank = dense_rank(desc(total_value))) %>% 
+  mutate(country_of_origin_name = fct_lump(country_of_origin_name, 12, w = )) %>% view()
+  
+  filter(rank <= 12) %>% 
+  ggplot(aes(calendar_year, yearly_value, fill = country_of_origin_name)) +
+  geom_col(position = "stack") +
+  scale_x_discrete() +
+  theme(legend.position = "none")
+
+library(plotly)
+
+ggplotly(b)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+useful text
+
+https://www.trade.gov/knowledge-product/south-africa-import-tariffs
+
+
+
